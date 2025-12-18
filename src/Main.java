@@ -9,6 +9,7 @@ class Main extends JFrame {
 
     Main() {
         super("Calculator");
+        setDefaultCloseOperation(WindowConstants.EXIT_ON_CLOSE);
         setBounds(0, 0, 360, 450);
 
         ImageIcon bgIcon = new ImageIcon("background.jpg");
