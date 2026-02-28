@@ -55,6 +55,8 @@ public class Main extends ApplicationAdapter {
         gameMap = new Map(10, 10);
         calculateMapCenter();
         createFogTexture();
+
+        player = new Entity(4, 4);
     }
 
     void calculateMapCenter() {
@@ -137,6 +139,9 @@ public class Main extends ApplicationAdapter {
             }
         }
     }
+
+    Entity player;
+    Color playerColor = new Color(0.8f, 0.2f, 0.2f, 1f);
 
     @Override
     public void render() {
@@ -230,6 +235,16 @@ public class Main extends ApplicationAdapter {
                 shapeRenderer.line(vx[i], vy[i], vx[(i + 1) % 6], vy[(i + 1) % 6]);
             }
         }
+    }
+
+    void drawPlayer(Entity player, float yOffset){
+        float width = (float)(Math.sqrt(3) * hexSize);
+        float height = 2 * hexSize;
+        float x = player.q * width + (player.r % 2) * (width / 2f);
+        float y = player.r * (height * 0.75f);
+        float centerX = mapStartX + x + (width / 2f);
+        float centerY = mapStartY + (y * perspectiveScale) + (height * perspectiveScale / 2f) + yOffset;
+        shapeRenderer.circle(centerX, centerY + 6, hexSize * 0.4f);
     }
 
     @Override
