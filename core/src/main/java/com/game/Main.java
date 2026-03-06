@@ -23,6 +23,8 @@ public class Main extends ApplicationAdapter {
     OrthographicCamera camera;
     Viewport viewport;
 
+    Entity player;
+    Color playerColor = new Color(0.8f, 0.2f, 0.2f, 1f);
     Map gameMap;
     Tile hoveredTile = null;
 
@@ -140,9 +142,6 @@ public class Main extends ApplicationAdapter {
         }
     }
 
-    Entity player;
-    Color playerColor = new Color(0.8f, 0.2f, 0.2f, 1f);
-
     @Override
     public void render() {
         updateMouse();
@@ -197,6 +196,16 @@ public class Main extends ApplicationAdapter {
             Gdx.gl.glLineWidth(1);
         }
         shapeRenderer.end();
+
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+        shapeRenderer.setColor(playerColor);
+
+        Tile playerTile = gameMap.getTile(player.q, player.r);
+        float playerYOffset = (playerTile != null) ? playerTile.hoverOffset : 0f;
+
+        drawPlayer(player, playerYOffset);
+
+        shapeRenderer.end();
         batch.setProjectionMatrix(camera.combined);
         batch.begin();
         batch.draw(fogTexture, 0, 0);
@@ -237,13 +246,14 @@ public class Main extends ApplicationAdapter {
         }
     }
 
-    void drawPlayer(Entity player, float yOffset){
-        float width = (float)(Math.sqrt(3) * hexSize);
-        float height = 2 * hexSize;
-        float x = player.q * width + (player.r % 2) * (width / 2f);
-        float y = player.r * (height * 0.75f);
-        float centerX = mapStartX + x + (width / 2f);
-        float centerY = mapStartY + (y * perspectiveScale) + (height * perspectiveScale / 2f) + yOffset;
+    void drawPlayer(Entity entity, float yOffset) {
+        float hexWidth = (float) (Math.sqrt(3) * hexSize);
+        float hexHeight = 2 * hexSize;
+        float x = entity.q * hexWidth + (entity.r % 2) * (hexWidth / 2f);
+        float y = entity.r * (hexHeight * 0.75f);
+        float centerX = mapStartX + x + (hexWidth / 2f);
+        float centerY = mapStartY + (y * perspectiveScale) + (hexHeight * perspectiveScale / 2f) + yOffset;
+
         shapeRenderer.circle(centerX, centerY + 6, hexSize * 0.4f);
     }
 
