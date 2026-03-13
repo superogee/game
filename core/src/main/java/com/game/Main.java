@@ -39,6 +39,8 @@ public class Main extends ApplicationAdapter {
     Color colorOutline = new Color(0.15f, 0.25f, 0.15f, 1f);
     Color fogColor = new Color(0.6f, 0.65f, 0.75f, 1f);
     Color darknessColor = new Color(0.05f, 0.05f, 0.1f, 1f);
+    Color wallColor = new Color(0.3f, 0.3f, 0.35f, 1f);
+    Color wallOutline = new Color(0.1f, 0.1f, 0.15f, 1f);
 
     Texture fogTexture;
     float mapStartX, mapStartY;
@@ -142,9 +144,35 @@ public class Main extends ApplicationAdapter {
         }
     }
 
+    void handleInput() {
+        if (Gdx.input.justTouched()) {
+            if (hoveredTile != null && hoveredTile.isSteppable) {
+                if (isNeighbor(player.q, player.r, hoveredTile.q, hoveredTile.r)) {
+                    player.q = hoveredTile.q;
+                    player.r = hoveredTile.r;
+                }
+            }
+        }
+    }
+
+    boolean isNeighbor(int q1, int r1, int q2, int r2) {
+        int[][] neighbors;
+        if (r1 % 2 == 0) {
+            neighbors = new int[][]{{0, 1}, {1, 0}, {0, -1}, {-1, -1}, {-1, 0}, {-1, 1}};
+        } else {
+            neighbors = new int[][]{{1, 1}, {1, 0}, {1, -1}, {0, -1}, {-1, 0}, {0, 1}};
+        }
+
+        for (int[] offset : neighbors) {
+            if (q1 + offset[0] == q2 && r1 + offset[1] == r2) return true;
+        }
+        return false;
+    }
+
     @Override
     public void render() {
         updateMouse();
+        handleInput();
 
         float delta = Gdx.graphics.getDeltaTime();
         float hoverSpeed = 40f;
@@ -156,40 +184,53 @@ public class Main extends ApplicationAdapter {
         Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
         camera.update();
         shapeRenderer.setProjectionMatrix(camera.combined);
+
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
 
         for (int r = gameMap.height - 1; r >= 0; r--) {
             for (int q = 0; q < gameMap.width; q++) {
                 Tile tile = gameMap.getTile(q, r);
-                if (tile != null && tile.isSteppable) {
-                    if (tile == hoveredTile) {
-                        tile.hoverOffset += hoverSpeed * delta;
-                        if (tile.hoverOffset > maxHover) tile.hoverOffset = maxHover;
+                if (tile != null) {
+                    if (tile.isSteppable) {
+                        if (tile == hoveredTile) {
+                            tile.hoverOffset += hoverSpeed * delta;
+                            if (tile.hoverOffset > maxHover) tile.hoverOffset = maxHover;
+                        } else {
+                            tile.hoverOffset -= hoverSpeed * delta;
+                            if (tile.hoverOffset < 0) tile.hoverOffset = 0;
+                        }
+
+                        if ((q + r) % 2 == 0) shapeRenderer.setColor(lightGreen);
+                        else shapeRenderer.setColor(darkGreen);
                     } else {
-                        tile.hoverOffset -= hoverSpeed * delta;
-                        if (tile.hoverOffset < 0) tile.hoverOffset = 0;
+                        shapeRenderer.setColor(wallColor);
+                        tile.hoverOffset = 0;
                     }
-                    if ((q + r) % 2 == 0) shapeRenderer.setColor(lightGreen);
-                    else shapeRenderer.setColor(darkGreen);
+
                     drawHex(q, r, true, tile.hoverOffset);
                 }
             }
         }
-
         shapeRenderer.end();
+
         shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
-        shapeRenderer.setColor(colorOutline);
+        Gdx.gl.glLineWidth(1);
 
         for (int r = gameMap.height - 1; r >= 0; r--) {
             for (int q = 0; q < gameMap.width; q++) {
                 Tile tile = gameMap.getTile(q, r);
-                if (tile != null && tile.isSteppable) {
+                if (tile != null) {
+                    if (tile.isSteppable) {
+                        shapeRenderer.setColor(colorOutline);
+                    } else {
+                        shapeRenderer.setColor(wallOutline); // Темный контур для стен
+                    }
                     drawHex(q, r, false, tile.hoverOffset);
                 }
             }
         }
 
-        if (hoveredTile != null) {
+        if (hoveredTile != null && hoveredTile.isSteppable) {
             shapeRenderer.setColor(Color.WHITE);
             Gdx.gl.glLineWidth(2);
             drawHex(hoveredTile.q, hoveredTile.r, false, hoveredTile.hoverOffset);

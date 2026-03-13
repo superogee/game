@@ -1,5 +1,7 @@
 package com.game;
 
+import com.badlogic.gdx.math.MathUtils;
+
 public class Map {
     public final int width;
     public final int height;
@@ -14,7 +16,8 @@ public class Map {
     private void mapGeneration() {
         for (int r = 0; r < height; r++) {
             for (int q = 0; q < width; q++) {
-                boolean isSteppable = true;
+                boolean isSteppable = MathUtils.random() > 0.2f;
+                if (q == 4 && r == 4) isSteppable = true;
                 tiles[q][r] = new Tile(q, r, isSteppable);
             }
         }
