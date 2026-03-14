@@ -177,6 +177,13 @@ public class Main extends ApplicationAdapter {
         float delta = Gdx.graphics.getDeltaTime();
         float hoverSpeed = 40f;
         float maxHover = 4f;
+        float hexWidth = (float) (Math.sqrt(3) * hexSize);
+        float hexHeight = 2 * hexSize;
+        float pX = player.q * hexWidth + (player.r % 2) * (hexWidth / 2f);
+        float pY = player.r * (hexHeight * 0.75f);
+        float playerCenterX = mapStartX + pX + (hexWidth / 2f);
+        float playerCenterY = mapStartY + (pY * perspectiveScale) + (hexHeight * perspectiveScale / 2f);
+        float lightRadius = hexSize * 5.5f;
 
         frameBuffer.begin();
         ScreenUtils.clear(darknessColor);
@@ -223,7 +230,7 @@ public class Main extends ApplicationAdapter {
                     if (tile.isSteppable) {
                         shapeRenderer.setColor(colorOutline);
                     } else {
-                        shapeRenderer.setColor(wallOutline); // Темный контур для стен
+                        shapeRenderer.setColor(wallOutline);
                     }
                     drawHex(q, r, false, tile.hoverOffset);
                 }
