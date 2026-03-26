@@ -1,5 +1,6 @@
 package com.game;
 
+import java.util.ArrayList;
 import com.badlogic.gdx.ApplicationAdapter;
 import com.badlogic.gdx.Gdx;
 import com.badlogic.gdx.graphics.Color;
@@ -27,6 +28,7 @@ public class Main extends ApplicationAdapter {
     Color playerColor = new Color(0.8f, 0.2f, 0.2f, 1f);
     Map gameMap;
     Tile hoveredTile = null;
+    ArrayList<Enemy> enemies = new ArrayList<>();
 
     final int width = 320;
     final int height = 180;
@@ -61,6 +63,10 @@ public class Main extends ApplicationAdapter {
         createFogTexture();
 
         player = new Entity(4, 4);
+
+        player = new Entity(4, 4);
+        enemies.add(new Enemy(2, 2, "a"));
+        enemies.add(new Enemy(7, 3, "b"));
     }
 
     void calculateMapCenter() {
@@ -145,11 +151,22 @@ public class Main extends ApplicationAdapter {
     }
 
     void handleInput() {
-        if (Gdx.input.justTouched()) {
-            if (hoveredTile != null && hoveredTile.isSteppable) {
-                if (isNeighbor(player.q, player.r, hoveredTile.q, hoveredTile.r)) {
+        if (Gdx.input.justTouched() && hoveredTile != null && hoveredTile.isSteppable) {
+            if (isNeighbor(player.q, player.r, hoveredTile.q, hoveredTile.r)) {
+
+                boolean enemyPresent = false;
+                for (Enemy e : enemies) {
+                    if (e.q == hoveredTile.q && e.r == hoveredTile.r) {
+                        enemyPresent = true;
+                        break;
+                    }
+                }
+
+                if (!enemyPresent) {
                     player.q = hoveredTile.q;
                     player.r = hoveredTile.r;
+
+                    updateEnemies();
                 }
             }
         }
@@ -185,72 +202,115 @@ public class Main extends ApplicationAdapter {
         camera.update();
         shapeRenderer.setProjectionMatrix(camera.combined);
 
-        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
+        float hexWidth = (float) (Math.sqrt(3) * hexSize);
+        float hexHeight = 2 * hexSize;
+        float pX = player.q * hexWidth + (player.r % 2) * (hexWidth / 2f);
+        float pY = player.r * (hexHeight * 0.75f);
+        float playerCenterX = mapStartX + pX + (hexWidth / 2f);
+        float playerCenterY = mapStartY + (pY * perspectiveScale) + (hexHeight * perspectiveScale / 2f);
 
+        float lightRadius = hexSize * 5.5f;
+
+        shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
         for (int r = gameMap.height - 1; r >= 0; r--) {
             for (int q = 0; q < gameMap.width; q++) {
                 Tile tile = gameMap.getTile(q, r);
-                if (tile != null) {
-                    if (tile.isSteppable) {
-                        if (tile == hoveredTile) {
-                            tile.hoverOffset += hoverSpeed * delta;
-                            if (tile.hoverOffset > maxHover) tile.hoverOffset = maxHover;
-                        } else {
-                            tile.hoverOffset -= hoverSpeed * delta;
-                            if (tile.hoverOffset < 0) tile.hoverOffset = 0;
-                        }
+                if (tile == null) continue;
 
-                        if ((q + r) % 2 == 0) shapeRenderer.setColor(lightGreen);
-                        else shapeRenderer.setColor(darkGreen);
-                    } else {
-                        shapeRenderer.setColor(wallColor);
-                        tile.hoverOffset = 0;
-                    }
+                float tX = q * hexWidth + (r % 2) * (hexWidth / 2f);
+                float tY = r * (hexHeight * 0.75f);
+                float tileCenterX = mapStartX + tX + (hexWidth / 2f);
+                float tileCenterY = mapStartY + (tY * perspectiveScale) + (hexHeight * perspectiveScale / 2f);
 
-                    drawHex(q, r, true, tile.hoverOffset);
+                float dist = Vector2.dst(playerCenterX, playerCenterY, tileCenterX, tileCenterY);
+
+                float lightIntensity = 0f;
+                if (dist <= lightRadius) {
+                    tile.isRevealed = true;
+                    lightIntensity = 1f - (dist / lightRadius);
                 }
+
+                if (!tile.isRevealed) continue;
+
+                float finalBrightness = Math.max(0.15f, lightIntensity);
+
+                if (tile.isSteppable) {
+                    if (tile == hoveredTile && dist <= lightRadius) {
+                        tile.hoverOffset += hoverSpeed * delta;
+                        if (tile.hoverOffset > maxHover) tile.hoverOffset = maxHover;
+                    } else {
+                        tile.hoverOffset -= hoverSpeed * delta;
+                        if (tile.hoverOffset < 0) tile.hoverOffset = 0;
+                    }
+                } else {
+                    tile.hoverOffset = 0;
+                }
+
+                Color baseColor = new Color();
+                if (tile.isSteppable) {
+                    baseColor.set(((q + r) % 2 == 0) ? lightGreen : darkGreen);
+                } else {
+                    baseColor.set(wallColor);
+                }
+
+                baseColor.lerp(darknessColor, 1f - finalBrightness);
+                shapeRenderer.setColor(baseColor);
+
+                drawHex(q, r, true, tile.hoverOffset);
             }
         }
         shapeRenderer.end();
 
         shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
         Gdx.gl.glLineWidth(1);
-
         for (int r = gameMap.height - 1; r >= 0; r--) {
             for (int q = 0; q < gameMap.width; q++) {
                 Tile tile = gameMap.getTile(q, r);
-                if (tile != null) {
-                    if (tile.isSteppable) {
-                        shapeRenderer.setColor(colorOutline);
-                    } else {
-                        shapeRenderer.setColor(wallOutline); // Темный контур для стен
-                    }
-                    drawHex(q, r, false, tile.hoverOffset);
-                }
+                if (tile == null || !tile.isRevealed) continue;
+
+                float tX = q * hexWidth + (r % 2) * (hexWidth / 2f);
+                float tY = r * (hexHeight * 0.75f);
+                float tileCenterX = mapStartX + tX + (hexWidth / 2f);
+                float tileCenterY = mapStartY + (tY * perspectiveScale) + (hexHeight * perspectiveScale / 2f);
+                float dist = Vector2.dst(playerCenterX, playerCenterY, tileCenterX, tileCenterY);
+
+                float finalBrightness = Math.max(0.15f, (dist <= lightRadius) ? 1f - (dist / lightRadius) : 0f);
+
+                Color outline = new Color(tile.isSteppable ? colorOutline : wallOutline);
+                outline.lerp(darknessColor, 1f - finalBrightness);
+                shapeRenderer.setColor(outline);
+
+                drawHex(q, r, false, tile.hoverOffset);
             }
         }
 
         if (hoveredTile != null && hoveredTile.isSteppable) {
-            shapeRenderer.setColor(Color.WHITE);
-            Gdx.gl.glLineWidth(2);
-            drawHex(hoveredTile.q, hoveredTile.r, false, hoveredTile.hoverOffset);
-            Gdx.gl.glLineWidth(1);
+            float htX = hoveredTile.q * hexWidth + (hoveredTile.r % 2) * (hexWidth / 2f);
+            float htY = hoveredTile.r * (hexHeight * 0.75f);
+            float htcX = mapStartX + htX + (hexWidth / 2f);
+            float htcY = mapStartY + (htY * perspectiveScale) + (hexHeight * perspectiveScale / 2f);
+            if (Vector2.dst(playerCenterX, playerCenterY, htcX, htcY) <= lightRadius) {
+                shapeRenderer.setColor(Color.WHITE);
+                Gdx.gl.glLineWidth(2);
+                drawHex(hoveredTile.q, hoveredTile.r, false, hoveredTile.hoverOffset);
+                Gdx.gl.glLineWidth(1);
+            }
         }
         shapeRenderer.end();
 
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
         shapeRenderer.setColor(playerColor);
-
         Tile playerTile = gameMap.getTile(player.q, player.r);
         float playerYOffset = (playerTile != null) ? playerTile.hoverOffset : 0f;
-
-        drawPlayer(player, playerYOffset);
-
+        drawEntity(player);
+        for (Enemy e : enemies) {
+            Tile tile = gameMap.getTile(e.q, e.r);
+            if (tile != null && tile.isRevealed) {
+                drawEntity(e);
+            }
+        }
         shapeRenderer.end();
-        batch.setProjectionMatrix(camera.combined);
-        batch.begin();
-        batch.draw(fogTexture, 0, 0);
-        batch.end();
+
         frameBuffer.end();
         ScreenUtils.clear(0, 0, 0, 1);
         viewport.apply();
@@ -287,15 +347,23 @@ public class Main extends ApplicationAdapter {
         }
     }
 
-    void drawPlayer(Entity entity, float yOffset) {
+    void drawEntity(Entity entity) {
+        Tile t = gameMap.getTile(entity.q, entity.r);
+        float yOff = (t != null) ? t.hoverOffset : 0;
+
         float hexWidth = (float) (Math.sqrt(3) * hexSize);
         float hexHeight = 2 * hexSize;
-        float x = entity.q * hexWidth + (entity.r % 2) * (hexWidth / 2f);
-        float y = entity.r * (hexHeight * 0.75f);
-        float centerX = mapStartX + x + (hexWidth / 2f);
-        float centerY = mapStartY + (y * perspectiveScale) + (hexHeight * perspectiveScale / 2f) + yOffset;
+        float centerX = mapStartX + entity.q * hexWidth + (entity.r % 2) * (hexWidth / 2f) + (hexWidth / 2f);
+        float centerY = mapStartY + (entity.r * hexHeight * 0.75f * perspectiveScale) + (hexHeight * perspectiveScale / 2f) + yOff;
 
+        shapeRenderer.setColor(entity.color);
         shapeRenderer.circle(centerX, centerY + 6, hexSize * 0.4f);
+    }
+
+    void updateEnemies() {
+        for (Enemy e : enemies) {
+            e.takeTurn(player, gameMap, enemies);
+        }
     }
 
     @Override
