@@ -25,7 +25,6 @@ public class Main extends ApplicationAdapter {
     Viewport viewport;
 
     Entity player;
-    Color playerColor = new Color(0.8f, 0.2f, 0.2f, 1f);
     Map gameMap;
     Tile hoveredTile = null;
     ArrayList<Enemy> enemies = new ArrayList<>();
@@ -39,12 +38,10 @@ public class Main extends ApplicationAdapter {
     Color lightGreen = new Color(0.75f, 0.85f, 0.75f, 1f);
     Color darkGreen = new Color(0.60f, 0.75f, 0.60f, 1f);
     Color colorOutline = new Color(0.15f, 0.25f, 0.15f, 1f);
-    Color fogColor = new Color(0.6f, 0.65f, 0.75f, 1f);
     Color darknessColor = new Color(0.05f, 0.05f, 0.1f, 1f);
     Color wallColor = new Color(0.3f, 0.3f, 0.35f, 1f);
     Color wallOutline = new Color(0.1f, 0.1f, 0.15f, 1f);
 
-    Texture fogTexture;
     float mapStartX, mapStartY;
 
     @Override
@@ -60,9 +57,6 @@ public class Main extends ApplicationAdapter {
 
         gameMap = new Map(10, 10);
         calculateMapCenter();
-        createFogTexture();
-
-        player = new Entity(4, 4);
 
         player = new Entity(4, 4);
         enemies.add(new Enemy(2, 2, "a"));
@@ -79,44 +73,6 @@ public class Main extends ApplicationAdapter {
 
         mapStartX = (width - totalMapWidth) / 2f;
         mapStartY = (height - totalMapHeight) / 2f;
-    }
-
-    void createFogTexture() {
-        Pixmap pixmap = new Pixmap(width, height, Pixmap.Format.RGBA8888);
-        float centerX = width / 2f;
-        float centerY = height / 2f;
-
-        float startFogRadius = height * 0.35f;
-        float fullFogRadius = height * 0.60f;
-        float startDarknessRadius = height * 0.55f;
-        float fullDarknessRadius = height * 0.85f;
-
-        for (int x = 0; x < width; x++) {
-            for (int y = 0; y < height; y++) {
-                float dist = Vector2.dst(x, y, centerX, centerY);
-
-                float fogAlpha = 0;
-                if (dist > startFogRadius) {
-                    fogAlpha = (dist - startFogRadius) / (fullFogRadius - startFogRadius);
-                    fogAlpha += MathUtils.random(-0.1f, 0.1f);
-                }
-                fogAlpha = MathUtils.clamp(fogAlpha, 0f, 1f);
-
-                float darknessFactor = 0;
-                if (dist > startDarknessRadius) {
-                    darknessFactor = (dist - startDarknessRadius) / (fullDarknessRadius - startDarknessRadius);
-                }
-                darknessFactor = MathUtils.clamp(darknessFactor, 0f, 1f);
-
-                Color pixelColor = new Color(fogColor).lerp(darknessColor, darknessFactor);
-
-                pixmap.setColor(pixelColor.r, pixelColor.g, pixelColor.b, fogAlpha);
-                pixmap.drawPixel(x, y);
-            }
-        }
-
-        fogTexture = new Texture(pixmap);
-        pixmap.dispose();
     }
 
     void updateMouse() {
@@ -154,18 +110,26 @@ public class Main extends ApplicationAdapter {
         if (Gdx.input.justTouched() && hoveredTile != null && hoveredTile.isSteppable) {
             if (isNeighbor(player.q, player.r, hoveredTile.q, hoveredTile.r)) {
 
-                boolean enemyPresent = false;
+                Enemy targetEnemy = null;
                 for (Enemy e : enemies) {
                     if (e.q == hoveredTile.q && e.r == hoveredTile.r) {
-                        enemyPresent = true;
+                        targetEnemy = e;
                         break;
                     }
                 }
 
-                if (!enemyPresent) {
+                if (targetEnemy != null) {
+                    targetEnemy.hp -= 2;
+                    System.out.println("Вы ударили врага! Его HP: " + targetEnemy.hp);
+
+                    if (targetEnemy.hp <= 0) {
+                        enemies.remove(targetEnemy);
+                        System.out.println("Враг повержен!");
+                    }
+                    updateEnemies();
+                } else {
                     player.q = hoveredTile.q;
                     player.r = hoveredTile.r;
-
                     updateEnemies();
                 }
             }
@@ -173,12 +137,9 @@ public class Main extends ApplicationAdapter {
     }
 
     boolean isNeighbor(int q1, int r1, int q2, int r2) {
-        int[][] neighbors;
-        if (r1 % 2 == 0) {
-            neighbors = new int[][]{{0, 1}, {1, 0}, {0, -1}, {-1, -1}, {-1, 0}, {-1, 1}};
-        } else {
-            neighbors = new int[][]{{1, 1}, {1, 0}, {1, -1}, {0, -1}, {-1, 0}, {0, 1}};
-        }
+        int[][] neighbors = (r1 % 2 == 0)
+            ? new int[][]{{0, 1}, {1, 0}, {0, -1}, {-1, -1}, {-1, 0}, {-1, 1}}
+            : new int[][]{{1, 1}, {1, 0}, {1, -1}, {0, -1}, {-1, 0}, {0, 1}};
 
         for (int[] offset : neighbors) {
             if (q1 + offset[0] == q2 && r1 + offset[1] == r2) return true;
@@ -299,16 +260,16 @@ public class Main extends ApplicationAdapter {
         shapeRenderer.end();
 
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-        shapeRenderer.setColor(playerColor);
-        Tile playerTile = gameMap.getTile(player.q, player.r);
-        float playerYOffset = (playerTile != null) ? playerTile.hoverOffset : 0f;
+
         drawEntity(player);
+
         for (Enemy e : enemies) {
             Tile tile = gameMap.getTile(e.q, e.r);
             if (tile != null && tile.isRevealed) {
                 drawEntity(e);
             }
         }
+
         shapeRenderer.end();
 
         frameBuffer.end();
@@ -361,7 +322,8 @@ public class Main extends ApplicationAdapter {
     }
 
     void updateEnemies() {
-        for (Enemy e : enemies) {
+        ArrayList<Enemy> enemiesCopy = new ArrayList<>(enemies);
+        for (Enemy e : enemiesCopy) {
             e.takeTurn(player, gameMap, enemies);
         }
     }
@@ -376,6 +338,5 @@ public class Main extends ApplicationAdapter {
         shapeRenderer.dispose();
         batch.dispose();
         frameBuffer.dispose();
-        fogTexture.dispose();
     }
 }
