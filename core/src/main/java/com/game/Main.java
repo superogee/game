@@ -1,275 +1,203 @@
 package com.game;
 
-import java.util.ArrayList;
-import com.badlogic.gdx.ApplicationAdapter;
-import com.badlogic.gdx.Gdx;
-import com.badlogic.gdx.graphics.Color;
-import com.badlogic.gdx.graphics.GL20;
-import com.badlogic.gdx.graphics.OrthographicCamera;
-import com.badlogic.gdx.graphics.Pixmap;
-import com.badlogic.gdx.graphics.Texture;
+import com.badlogic.gdx.*;
+import com.badlogic.gdx.graphics.*;
 import com.badlogic.gdx.graphics.g2d.SpriteBatch;
-import com.badlogic.gdx.graphics.glutils.FrameBuffer;
-import com.badlogic.gdx.graphics.glutils.ShapeRenderer;
-import com.badlogic.gdx.math.MathUtils;
-import com.badlogic.gdx.math.Vector2;
+import com.badlogic.gdx.graphics.glutils.*;
+import com.badlogic.gdx.math.*;
 import com.badlogic.gdx.utils.ScreenUtils;
-import com.badlogic.gdx.utils.viewport.FitViewport;
-import com.badlogic.gdx.utils.viewport.Viewport;
+import com.badlogic.gdx.utils.viewport.*;
+import java.util.ArrayList;
 
 public class Main extends ApplicationAdapter {
     ShapeRenderer shapeRenderer;
     SpriteBatch batch;
     FrameBuffer frameBuffer;
-    OrthographicCamera camera;
     Viewport viewport;
 
-    Entity player;
     Map gameMap;
-    Tile hoveredTile = null;
+    Entity player;
     ArrayList<Enemy> enemies = new ArrayList<>();
+    Tile hoveredTile;
 
-    final int width = 320;
-    final int height = 180;
+    boolean isGameOver = false;
 
-    float hexSize = 12f;
-    float perspectiveScale = 0.75f;
+    float screenWidth = 320.0f;
+    float screenHeight = 180.0f;
+    float hexRadius = 12.0f;
+    float yStretch = 0.7f;
 
-    Color lightGreen = new Color(0.75f, 0.85f, 0.75f, 1f);
-    Color darkGreen = new Color(0.60f, 0.75f, 0.60f, 1f);
-    Color colorOutline = new Color(0.15f, 0.25f, 0.15f, 1f);
-    Color darknessColor = new Color(0.05f, 0.05f, 0.1f, 1f);
-    Color wallColor = new Color(0.3f, 0.3f, 0.35f, 1f);
-    Color wallOutline = new Color(0.1f, 0.1f, 0.15f, 1f);
+    Color colorGrassLight = new Color(0.8f, 0.9f, 0.8f, 1.0f);
+    Color colorGrassDark = new Color(0.7f, 0.85f, 0.7f, 1.0f);
+    Color colorWall = new Color(0.7f, 0.7f, 0.75f, 1.0f);
+    Color colorShadow = new Color(0.0f, 0.0f, 0.05f, 1.0f);
+    Color colorGrassOutline = new Color(0.4f, 0.6f, 0.4f, 1.0f);
+    Color colorWallOutline = new Color(0.3f, 0.3f, 0.35f, 1.0f);
+    Color colorHighlight = new Color(0.6f, 0.9f, 0.9f, 1.0f);
 
-    float mapStartX, mapStartY;
+    float offsetX, offsetY;
 
     @Override
     public void create() {
         shapeRenderer = new ShapeRenderer();
         batch = new SpriteBatch();
-        camera = new OrthographicCamera();
-        camera.setToOrtho(false, width, height);
-        viewport = new FitViewport(width, height);
-
-        frameBuffer = new FrameBuffer(Pixmap.Format.RGBA8888, width, height, false);
+        viewport = new FitViewport(screenWidth, screenHeight);
+        frameBuffer = new FrameBuffer(Pixmap.Format.RGBA8888, (int)screenWidth, (int)screenHeight, false);
         frameBuffer.getColorBufferTexture().setFilter(Texture.TextureFilter.Nearest, Texture.TextureFilter.Nearest);
 
         gameMap = new Map(10, 10);
-        calculateMapCenter();
+        player = new Entity(4, 4, new Color(0.9f, 0.4f, 0.4f, 1.0f), 12);
+        enemies.add(new Enemy(2, 2));
+        enemies.add(new Enemy(8, 5));
 
-        player = new Entity(4, 4);
-        enemies.add(new Enemy(2, 2, "a"));
-        enemies.add(new Enemy(7, 3, "b"));
+        setupCamera();
     }
 
-    void calculateMapCenter() {
-        float hexWidth = (float) (Math.sqrt(3) * hexSize);
-        float hexHeight = 2 * hexSize * perspectiveScale;
-        float rowHeight = (hexHeight * 0.75f);
-
-        float totalMapWidth = gameMap.width * hexWidth + (hexWidth * 0.5f);
-        float totalMapHeight = (gameMap.height - 1) * rowHeight + hexHeight;
-
-        mapStartX = (width - totalMapWidth) / 2f;
-        mapStartY = (height - totalMapHeight) / 2f;
+    void setupCamera() {
+        float w = (float)Math.sqrt(3) * hexRadius;
+        float h = 2 * hexRadius * yStretch;
+        offsetX = (screenWidth - (gameMap.width * w + w / 2.0f)) / 2.0f;
+        offsetY = (screenHeight - ((gameMap.height - 1) * (h * 0.75f) + h)) / 2.0f;
     }
 
-    void updateMouse() {
-        float screenX = Gdx.input.getX();
-        float screenY = Gdx.input.getY();
-        Vector2 worldCoords = viewport.unproject(new Vector2(screenX, screenY));
-
+    void syncInput() {
+        Vector2 mouse = viewport.unproject(new Vector2(Gdx.input.getX(), Gdx.input.getY()));
         hoveredTile = null;
-        float minDst = Float.MAX_VALUE;
+        float minD = Float.MAX_VALUE;
 
-        float hexWidth = (float) (Math.sqrt(3) * hexSize);
-        float hexHeight = 2 * hexSize;
+        float w = (float)Math.sqrt(3) * hexRadius;
+        float h = 2 * hexRadius;
 
         for (int r = 0; r < gameMap.height; r++) {
             for (int q = 0; q < gameMap.width; q++) {
-                Tile tile = gameMap.getTile(q, r);
-                if (tile == null || !tile.isSteppable) continue;
-                float x = q * hexWidth + (r % 2) * (hexWidth / 2f);
-                float y = r * (hexHeight * 0.75f);
-                float centerX = mapStartX + x + (hexWidth / 2f);
-                float centerY = mapStartY + (y * perspectiveScale) + (hexHeight * perspectiveScale / 2f);
-                float dx = worldCoords.x - centerX;
-                float dy = (worldCoords.y - centerY) / perspectiveScale;
-                float dst = dx * dx + dy * dy;
+                Tile t = gameMap.getTile(q, r);
+                if (t == null || !t.isWalkable) continue;
 
-                if (dst < (hexSize * hexSize) && dst < minDst) {
-                    minDst = dst;
-                    hoveredTile = tile;
+                float tx = offsetX + q * w + (r % 2) * (w / 2.0f) + w / 2.0f;
+                float ty = offsetY + (r * h * 0.75f * yStretch) + (h * yStretch / 2.0f);
+                float d = Vector2.dst2(mouse.x, mouse.y, tx, ty);
+
+                if (d < (hexRadius * hexRadius) && d < minD) {
+                    minD = d;
+                    hoveredTile = t;
                 }
             }
         }
     }
 
-    void handleInput() {
-        if (Gdx.input.justTouched() && hoveredTile != null && hoveredTile.isSteppable) {
-            if (isNeighbor(player.q, player.r, hoveredTile.q, hoveredTile.r)) {
+    void gameTick() {
+        if (isGameOver) return;
 
-                Enemy targetEnemy = null;
-                for (Enemy e : enemies) {
-                    if (e.q == hoveredTile.q && e.r == hoveredTile.r) {
-                        targetEnemy = e;
-                        break;
-                    }
-                }
+        if (Gdx.input.justTouched() && hoveredTile != null) {
+            if (gameMap.getDistance(player.q, player.r, hoveredTile.q, hoveredTile.r) == 1) {
+                Enemy target = null;
+                for (Enemy e : enemies) if (e.q == hoveredTile.q && e.r == hoveredTile.r) target = e;
 
-                if (targetEnemy != null) {
-                    targetEnemy.hp -= 2;
-                    System.out.println("Вы ударили врага! Его HP: " + targetEnemy.hp);
-
-                    if (targetEnemy.hp <= 0) {
-                        enemies.remove(targetEnemy);
-                        System.out.println("Враг повержен!");
-                    }
-                    updateEnemies();
+                if (target != null) {
+                    target.hp -= 4;
+                    if (target.hp <= 0) enemies.remove(target);
                 } else {
                     player.q = hoveredTile.q;
                     player.r = hoveredTile.r;
-                    updateEnemies();
                 }
+
+                for (Enemy e : new ArrayList<>(enemies)) e.update(player, gameMap, enemies);
+                if (player.hp <= 0) isGameOver = true;
             }
         }
-    }
-
-    boolean isNeighbor(int q1, int r1, int q2, int r2) {
-        int[][] neighbors = (r1 % 2 == 0)
-            ? new int[][]{{0, 1}, {1, 0}, {0, -1}, {-1, -1}, {-1, 0}, {-1, 1}}
-            : new int[][]{{1, 1}, {1, 0}, {1, -1}, {0, -1}, {-1, 0}, {0, 1}};
-
-        for (int[] offset : neighbors) {
-            if (q1 + offset[0] == q2 && r1 + offset[1] == r2) return true;
-        }
-        return false;
     }
 
     @Override
     public void render() {
-        updateMouse();
-        handleInput();
+        syncInput();
+        gameTick();
 
         float delta = Gdx.graphics.getDeltaTime();
-        float hoverSpeed = 40f;
-        float maxHover = 4f;
-
         frameBuffer.begin();
-        ScreenUtils.clear(darknessColor);
+        ScreenUtils.clear(colorShadow);
         Gdx.gl.glEnable(GL20.GL_BLEND);
-        Gdx.gl.glBlendFunc(GL20.GL_SRC_ALPHA, GL20.GL_ONE_MINUS_SRC_ALPHA);
-        camera.update();
-        shapeRenderer.setProjectionMatrix(camera.combined);
+        shapeRenderer.setProjectionMatrix(viewport.getCamera().combined);
 
-        float hexWidth = (float) (Math.sqrt(3) * hexSize);
-        float hexHeight = 2 * hexSize;
-        float pX = player.q * hexWidth + (player.r % 2) * (hexWidth / 2f);
-        float pY = player.r * (hexHeight * 0.75f);
-        float playerCenterX = mapStartX + pX + (hexWidth / 2f);
-        float playerCenterY = mapStartY + (pY * perspectiveScale) + (hexHeight * perspectiveScale / 2f);
+        float w = (float)Math.sqrt(3) * hexRadius;
+        float h = 2 * hexRadius;
+        float viewRadius = hexRadius * 5.5f;
 
-        float lightRadius = hexSize * 5.5f;
+        float px = offsetX + player.q * w + (player.r % 2) * (w / 2.0f) + w / 2.0f;
+        float py = offsetY + (player.r * h * 0.75f * yStretch) + (h * yStretch / 2.0f);
 
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
         for (int r = gameMap.height - 1; r >= 0; r--) {
             for (int q = 0; q < gameMap.width; q++) {
-                Tile tile = gameMap.getTile(q, r);
-                if (tile == null) continue;
+                Tile t = gameMap.getTile(q, r);
+                float tx = offsetX + q * w + (r % 2) * (w / 2.0f) + w / 2.0f;
+                float ty = offsetY + (r * h * 0.75f * yStretch) + (h * yStretch / 2.0f);
+                float dist = Vector2.dst(px, py, tx, ty);
 
-                float tX = q * hexWidth + (r % 2) * (hexWidth / 2f);
-                float tY = r * (hexHeight * 0.75f);
-                float tileCenterX = mapStartX + tX + (hexWidth / 2f);
-                float tileCenterY = mapStartY + (tY * perspectiveScale) + (hexHeight * perspectiveScale / 2f);
+                if (dist < viewRadius) { t.isVisible = true; t.isExplored = true; }
+                else t.isVisible = false;
 
-                float dist = Vector2.dst(playerCenterX, playerCenterY, tileCenterX, tileCenterY);
+                if (!t.isExplored) continue;
 
-                float lightIntensity = 0f;
-                if (dist <= lightRadius) {
-                    tile.isRevealed = true;
-                    lightIntensity = 1f - (dist / lightRadius);
-                }
+                float light = t.isVisible ? Math.max(0.1f, 1.0f - dist / viewRadius) : 0.1f;
 
-                if (!tile.isRevealed) continue;
-
-                float finalBrightness = Math.max(0.15f, lightIntensity);
-
-                if (tile.isSteppable) {
-                    if (tile == hoveredTile && dist <= lightRadius) {
-                        tile.hoverOffset += hoverSpeed * delta;
-                        if (tile.hoverOffset > maxHover) tile.hoverOffset = maxHover;
-                    } else {
-                        tile.hoverOffset -= hoverSpeed * delta;
-                        if (tile.hoverOffset < 0) tile.hoverOffset = 0;
-                    }
+                if (t.isWalkable && t == hoveredTile && t.isVisible && !isGameOver) {
+                    t.lift = MathUtils.lerp(t.lift, 4.0f, delta * 10.0f);
                 } else {
-                    tile.hoverOffset = 0;
+                    t.lift = MathUtils.lerp(t.lift, 0.0f, delta * 10.0f);
                 }
 
-                Color baseColor = new Color();
-                if (tile.isSteppable) {
-                    baseColor.set(((q + r) % 2 == 0) ? lightGreen : darkGreen);
-                } else {
-                    baseColor.set(wallColor);
+                Color base = t.isWalkable ? ((q + r) % 2 == 0 ? colorGrassLight : colorGrassDark) : colorWall;
+                Color tileFilledColor = new Color(base).lerp(colorShadow, 1.0f - light);
+
+                if (t == hoveredTile && t.isWalkable && !isGameOver && t.isVisible) {
+                    tileFilledColor.lerp(colorHighlight, 0.4f * (t.lift / 4.0f));
                 }
 
-                baseColor.lerp(darknessColor, 1f - finalBrightness);
-                shapeRenderer.setColor(baseColor);
-
-                drawHex(q, r, true, tile.hoverOffset);
+                shapeRenderer.setColor(tileFilledColor);
+                drawHexFilled(tx, ty + t.lift);
             }
         }
         shapeRenderer.end();
 
         shapeRenderer.begin(ShapeRenderer.ShapeType.Line);
-        Gdx.gl.glLineWidth(1);
         for (int r = gameMap.height - 1; r >= 0; r--) {
             for (int q = 0; q < gameMap.width; q++) {
-                Tile tile = gameMap.getTile(q, r);
-                if (tile == null || !tile.isRevealed) continue;
+                Tile t = gameMap.getTile(q, r);
+                if (!t.isExplored) continue;
 
-                float tX = q * hexWidth + (r % 2) * (hexWidth / 2f);
-                float tY = r * (hexHeight * 0.75f);
-                float tileCenterX = mapStartX + tX + (hexWidth / 2f);
-                float tileCenterY = mapStartY + (tY * perspectiveScale) + (hexHeight * perspectiveScale / 2f);
-                float dist = Vector2.dst(playerCenterX, playerCenterY, tileCenterX, tileCenterY);
+                float tx = offsetX + q * w + (r % 2) * (w / 2.0f) + w / 2.0f;
+                float ty = offsetY + (r * h * 0.75f * yStretch) + (h * yStretch / 2.0f);
+                float dist = Vector2.dst(px, py, tx, ty);
+                float light = t.isVisible ? Math.max(0.1f, 1.0f - dist / viewRadius) : 0.1f;
 
-                float finalBrightness = Math.max(0.15f, (dist <= lightRadius) ? 1f - (dist / lightRadius) : 0f);
+                Color outlineBase = t.isWalkable ? colorGrassOutline : colorWallOutline;
+                Color finalOutlineColor = new Color(outlineBase).lerp(colorShadow, 1.0f - light);
 
-                Color outline = new Color(tile.isSteppable ? colorOutline : wallOutline);
-                outline.lerp(darknessColor, 1f - finalBrightness);
-                shapeRenderer.setColor(outline);
+                if (t == hoveredTile && t.isWalkable && !isGameOver && t.isVisible) {
+                    finalOutlineColor.lerp(colorHighlight, 0.8f * (t.lift / 4.0f));
+                }
 
-                drawHex(q, r, false, tile.hoverOffset);
-            }
-        }
-
-        if (hoveredTile != null && hoveredTile.isSteppable) {
-            float htX = hoveredTile.q * hexWidth + (hoveredTile.r % 2) * (hexWidth / 2f);
-            float htY = hoveredTile.r * (hexHeight * 0.75f);
-            float htcX = mapStartX + htX + (hexWidth / 2f);
-            float htcY = mapStartY + (htY * perspectiveScale) + (hexHeight * perspectiveScale / 2f);
-            if (Vector2.dst(playerCenterX, playerCenterY, htcX, htcY) <= lightRadius) {
-                shapeRenderer.setColor(Color.WHITE);
-                Gdx.gl.glLineWidth(2);
-                drawHex(hoveredTile.q, hoveredTile.r, false, hoveredTile.hoverOffset);
-                Gdx.gl.glLineWidth(1);
+                shapeRenderer.setColor(finalOutlineColor);
+                drawHexLine(tx, ty + t.lift);
             }
         }
         shapeRenderer.end();
 
         shapeRenderer.begin(ShapeRenderer.ShapeType.Filled);
-
-        drawEntity(player);
-
+        drawUnit(player, px, py);
         for (Enemy e : enemies) {
-            Tile tile = gameMap.getTile(e.q, e.r);
-            if (tile != null && tile.isRevealed) {
-                drawEntity(e);
+            Tile t = gameMap.getTile(e.q, e.r);
+            if (t.isVisible) {
+                float ex = offsetX + e.q * w + (e.r % 2) * (w / 2.0f) + w / 2.0f;
+                float ey = offsetY + (e.r * h * 0.75f * yStretch) + (h * yStretch / 2.0f);
+                drawUnit(e, ex, ey);
             }
         }
 
+        if (isGameOver) {
+            shapeRenderer.setColor(0.5f, 0.0f, 0.0f, 0.4f);
+            shapeRenderer.rect(0, 0, screenWidth, screenHeight);
+        }
         shapeRenderer.end();
 
         frameBuffer.end();
@@ -277,66 +205,47 @@ public class Main extends ApplicationAdapter {
         viewport.apply();
         batch.setProjectionMatrix(viewport.getCamera().combined);
         batch.begin();
-        batch.draw(frameBuffer.getColorBufferTexture(), 0, 0, width, height, 0, 0, width, height, false, true);
+        batch.draw(frameBuffer.getColorBufferTexture(), 0, 0, screenWidth, screenHeight, 0, 0, (int)screenWidth, (int)screenHeight, false, true);
         batch.end();
     }
 
-    void drawHex(int col, int row, boolean fill, float yOffset) {
-        float hexWidth = (float) (Math.sqrt(3) * hexSize);
-        float hexHeight = 2 * hexSize;
-        float x = col * hexWidth + (row % 2) * (hexWidth / 2f);
-        float y = row * (hexHeight * 0.75f);
-        float centerX = mapStartX + x + (hexWidth / 2f);
-        float centerY = mapStartY + (y * perspectiveScale) + (hexHeight * perspectiveScale / 2f) + yOffset;
-        float[] vx = new float[6];
-        float[] vy = new float[6];
+    void drawUnit(Entity e, float x, float y) {
+        Tile t = gameMap.getTile(e.q, e.r);
+        float h = (t != null) ? t.lift : 0;
+        shapeRenderer.setColor(e.color);
+        shapeRenderer.circle(x, y + 5.0f + h, hexRadius * 0.4f);
 
+        float hpBar = (float)e.hp / e.maxHp;
+        shapeRenderer.setColor(Color.BLACK);
+        shapeRenderer.rect(x - 6.0f, y + 12.0f + h, 12.0f, 2.0f);
+        shapeRenderer.setColor(hpBar > 0.4f ? Color.GREEN : Color.RED);
+        shapeRenderer.rect(x - 6.0f, y + 12.0f + h, 12.0f * hpBar, 2.0f);
+    }
+
+    void drawHexFilled(float x, float y) {
+        float[] v = getHexPoints(x, y);
         for (int i = 0; i < 6; i++) {
-            float angleDeg = 60 * i + 30;
-            vx[i] = centerX + hexSize * MathUtils.cosDeg(angleDeg);
-            vy[i] = centerY + hexSize * MathUtils.sinDeg(angleDeg) * perspectiveScale;
-        }
-
-        if (fill) {
-            for (int i = 0; i < 6; i++) {
-                shapeRenderer.triangle(centerX, centerY, vx[i], vy[i], vx[(i + 1) % 6], vy[(i + 1) % 6]);
-            }
-        } else {
-            for (int i = 0; i < 6; i++) {
-                shapeRenderer.line(vx[i], vy[i], vx[(i + 1) % 6], vy[(i + 1) % 6]);
-            }
+            shapeRenderer.triangle(x, y, v[i * 2], v[i * 2 + 1], v[(i * 2 + 2) % 12], v[(i * 2 + 3) % 12]);
         }
     }
 
-    void drawEntity(Entity entity) {
-        Tile t = gameMap.getTile(entity.q, entity.r);
-        float yOff = (t != null) ? t.hoverOffset : 0;
-
-        float hexWidth = (float) (Math.sqrt(3) * hexSize);
-        float hexHeight = 2 * hexSize;
-        float centerX = mapStartX + entity.q * hexWidth + (entity.r % 2) * (hexWidth / 2f) + (hexWidth / 2f);
-        float centerY = mapStartY + (entity.r * hexHeight * 0.75f * perspectiveScale) + (hexHeight * perspectiveScale / 2f) + yOff;
-
-        shapeRenderer.setColor(entity.color);
-        shapeRenderer.circle(centerX, centerY + 6, hexSize * 0.4f);
-    }
-
-    void updateEnemies() {
-        ArrayList<Enemy> enemiesCopy = new ArrayList<>(enemies);
-        for (Enemy e : enemiesCopy) {
-            e.takeTurn(player, gameMap, enemies);
+    void drawHexLine(float x, float y) {
+        float[] v = getHexPoints(x, y);
+        for (int i = 0; i < 6; i++) {
+            shapeRenderer.line(v[i * 2], v[i * 2 + 1], v[(i * 2 + 2) % 12], v[(i * 2 + 3) % 12]);
         }
     }
 
-    @Override
-    public void resize(int width, int height) {
-        viewport.update(width, height, true);
+    float[] getHexPoints(float x, float y) {
+        float[] v = new float[12];
+        for (int i = 0; i < 6; i++) {
+            float ang = 60 * i + 30;
+            v[i * 2] = x + hexRadius * MathUtils.cosDeg(ang);
+            v[i * 2 + 1] = y + hexRadius * MathUtils.sinDeg(ang) * yStretch;
+        }
+        return v;
     }
 
-    @Override
-    public void dispose() {
-        shapeRenderer.dispose();
-        batch.dispose();
-        frameBuffer.dispose();
-    }
+    @Override public void resize(int w, int h) { viewport.update(w, h, true); }
+    @Override public void dispose() { shapeRenderer.dispose(); batch.dispose(); frameBuffer.dispose(); }
 }

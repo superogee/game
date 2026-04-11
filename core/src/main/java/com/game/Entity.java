@@ -5,18 +5,13 @@ import com.badlogic.gdx.graphics.Color;
 public class Entity {
     public int q, r;
     public Color color;
-    public int hp;
-    public int maxHp;
+    public int hp, maxHp;
 
-    public Entity(int q, int r) {
-        this(q, r, new Color(0.8f, 0.2f, 0.2f, 1f), 10);
-    }
-
-    public Entity(int q, int r, Color color, int maxHp) {
+    public Entity(int q, int r, Color c, int m) {
         this.q = q;
         this.r = r;
-        this.color = color;
-        this.maxHp = maxHp;
-        this.hp = maxHp;
+        this.color = c;
+        this.maxHp = m;
+        this.hp = m;
     }
 }
